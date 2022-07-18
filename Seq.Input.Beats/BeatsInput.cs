@@ -18,7 +18,6 @@ namespace Seq.Input.Beats
         private TextWriter textWriter;
         private CancellationTokenSource? tokenSource;
         private Task? task;
-        private JsonTextWriter jsonWriter;
 
         [SeqAppSetting(
             DisplayName = "Listening Port",
@@ -53,10 +52,6 @@ namespace Seq.Input.Beats
                 });
             }
 
-            this.jsonWriter = new JsonTextWriter(inputWriter);
-            this.jsonWriter.Formatting = Formatting.None;
-            this.jsonWriter.Indentation = 0;
-
             this.textWriter = inputWriter;
             this.tokenSource = new CancellationTokenSource();
             this.task = Task.Run(async () =>
@@ -65,24 +60,17 @@ namespace Seq.Input.Beats
                 IPEndPoint localEndPoint = new IPEndPoint(ipAddress, Port);
                 var listener = new TcpListener(localEndPoint);
                 listener.Start(100);
-                //Socket listener = new Socket(ipAddress.AddressFamily,SocketType.Stream, ProtocolType.Tcp);
 
                 var token = tokenSource.Token;
 
                 try
                 {
-                    //    listener.Bind(localEndPoint);
-                    //  listener.Listen(100);
 
                     while (!token.IsCancellationRequested)
                     {
                         var socket = await listener.AcceptSocketAsync();
 
-                        //var socket = await listener.AcceptAsync();
-
                         var task = HandleConnection(socket, token);
-
-                        await task;
                     }
 
                     listener.Stop();
@@ -114,13 +102,13 @@ namespace Seq.Input.Beats
                     try
                     {
                         state.Expand();
-                        read = await handler.ReceiveAsync(state.TargetBuffer, 0, cancellationToken);
+                        var target = state.buffer.AsMemory(state.writePosition);
+                        read = await handler.ReceiveAsync(target, 0, cancellationToken);
 
                         state.writePosition += read;
 
-                        state.TryDecode();
+                        await state.TryDecode(cancellationToken);
 
-                        await state.TryAckBatch(cancellationToken);
                     }
                     catch (Exception ex)
                     {
@@ -136,7 +124,7 @@ namespace Seq.Input.Beats
             handler.Close();
         }
 
-        public void HandleMessages(ConnectionStateObject state, Message message)
+        public Task HandleMessages(ConnectionStateObject state, Message message)
         {
             var result = message.AsResult();
             // add transforms handling here
@@ -156,16 +144,15 @@ namespace Seq.Input.Beats
                 jsEngine.SetValue("message", result);
 
                 jsEngine.Execute(parseTransform);
-
             }
-            
-
 
             lock (textWriter)
             {
-                result.Write(jsonWriter);
+                result.Write(textWriter);
                 textWriter.WriteLine();
             }
+
+            return Task.CompletedTask;
         }
 
         public void Stop()

@@ -2,12 +2,13 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 
 namespace Seq.Input.Beats
 {
     public class ClefMessage
     {
-        public DateTime UtcTimestamp { get; set; }
+        public string? UtcTimestamp { get; set; }
 
         public string? Exception { get; set; }
 
@@ -20,36 +21,50 @@ namespace Seq.Input.Beats
         Dictionary<string, object> _feilds;
         public IDictionary<string, object> Properties => _feilds ?? (_feilds = new Dictionary<string, object>());
 
-        public void Write(JsonTextWriter writer)
+        public void Write(TextWriter writer)
         {
-            writer.WriteStartObject();
+            using var jsonWriter = new JsonTextWriter(writer);
+            jsonWriter.Formatting = Formatting.None;
+            jsonWriter.Indentation = 0;
+
+            jsonWriter.WriteStartObject();
 
             if (!string.IsNullOrEmpty(Message))
             {
-                writer.WritePropertyName("@m");
-                writer.WriteValue(Message);
+                jsonWriter.WritePropertyName("@m");
+                jsonWriter.WriteValue(Message);
             }
 
             if (!string.IsNullOrEmpty(MessageTemplate))
             {
-                writer.WritePropertyName("@mt");
-                writer.WriteValue(MessageTemplate);
+                jsonWriter.WritePropertyName("@mt");
+                jsonWriter.WriteValue(MessageTemplate);
             }
 
             if (!string.IsNullOrEmpty(Level))
             {
-                writer.WritePropertyName("@l");
-                writer.WriteValue(Level);
+                jsonWriter.WritePropertyName("@l");
+                jsonWriter.WriteValue(Level);
             }
 
             if (!string.IsNullOrEmpty(Exception))
             {
-                writer.WritePropertyName("@x");
-                writer.WriteValue(Exception);
+                jsonWriter.WritePropertyName("@x");
+                jsonWriter.WriteValue(Exception);
             }
 
-            writer.WritePropertyName("@t");
-            writer.WriteValue(UtcTimestamp.ToString("o", CultureInfo.InvariantCulture));
+            var timestamp = UtcTimestamp;
+            if (DateTime.TryParse(timestamp, out var dt))
+            {
+                timestamp = dt.ToString("o", CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                timestamp = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+            }
+
+            jsonWriter.WritePropertyName("@t");
+            jsonWriter.WriteValue(timestamp);
 
             if (_feilds != null)
             {
@@ -61,13 +76,13 @@ namespace Seq.Input.Beats
                         name = '@' + name;
                     }
 
-                    writer.WritePropertyName(name);
-                    writer.WriteValue(f.Value);
+                    jsonWriter.WritePropertyName(name);
+                    jsonWriter.WriteValue(f.Value);
                 }
             }
 
-            writer.WriteEndObject();
-            writer.Flush();
+            jsonWriter.WriteEndObject();
+            jsonWriter.Flush();
         }
     }
 }

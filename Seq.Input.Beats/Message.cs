@@ -1,18 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace Seq.Input.Beats
 {
     public class Message
     {
-        public Message(int sequence, int fieldLength)
+        public Message(uint sequence, int fieldLength)
         {
             Fields = new Dictionary<string, string>(fieldLength);
             Sequence = sequence;
         }
 
-        public Message(int sequence, Dictionary<string, string> fields)
+        public Message(uint sequence, Dictionary<string, string> fields)
         {
             Fields = fields ?? new Dictionary<string, string>();
             Sequence = sequence;
@@ -20,7 +21,7 @@ namespace Seq.Input.Beats
 
         public Dictionary<string, string> Fields { get; }
 
-        public int Sequence { get; }
+        public uint Sequence { get; }
 
         private string GetField(string name)
         {
@@ -39,7 +40,7 @@ namespace Seq.Input.Beats
         {
             var r = new ClefMessage()
             {
-                UtcTimestamp = DateTime.Parse(GetField("@timestamp")),
+                UtcTimestamp = DateTime.Parse(GetField("@timestamp")).ToString("o", CultureInfo.InvariantCulture),
                 Message = GetField("message"),
             };
 

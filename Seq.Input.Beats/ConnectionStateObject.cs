@@ -19,46 +19,20 @@ namespace Seq.Input.Beats
             // Receive buffer.  
             public byte[] buffer = ArrayPool<byte>.Shared.Rent(1024);
 
-            public Memory<byte> TargetBuffer => buffer.AsMemory(this.readPosition);
-
             // Client socket.
             public Socket workSocket = null!;
 
             private uint batchSize = 0;
 
-            public Action<ConnectionStateObject, Message> ProcessMessage = (state, message) => { };
-
+            public Func<ConnectionStateObject, Message, Task> ProcessMessage = (state, message) => Task.CompletedTask;
 
             public async Task TryAckBatch(CancellationToken cancellationToken)
             {
-                static Memory<byte> SetPayload(byte[] buffer, int MaxSequence)
-                {
-                    buffer[0] = (byte)'2';
-                    buffer[1] = (byte)'A';
-                    var span = buffer.AsSpan(2, 4);
-                    if (!BitConverter.TryWriteBytes(span, MaxSequence))
-                    {
-                        throw new Exception();
-                    }
-                    span.Reverse();
-
-                    return buffer.AsMemory(0, 6);
-                }
-
                 try
                 {
                     if (this.batchSize == 0)
                     {
-                        var buffer = ArrayPool<byte>.Shared.Rent(6);
-
-                        try
-                        {
-                            await workSocket.SendAsync(SetPayload(buffer, MaxSequence), SocketFlags.None, cancellationToken);
-                        }
-                        finally
-                        {
-                            ArrayPool<byte>.Shared.Return(buffer);
-                        }
+                        await AckMessage(MaxSequence, cancellationToken);
 
                         MaxSequence = 0;
                     }
@@ -70,12 +44,52 @@ namespace Seq.Input.Beats
                 }
             }
 
-            public void MessageRecieved(Message message)
+            public async Task AckMessage(uint sequance, CancellationToken cancellationToken)
+            {
+                static Memory<byte> SetPayload(byte[] buffer, uint sequance)
+                {
+                    buffer[0] = (byte)'2';
+                    buffer[1] = (byte)'A';
+                    var span = buffer.AsSpan(2, 4);
+                    if (!BitConverter.TryWriteBytes(span, sequance))
+                    {
+                        throw new Exception();
+                    }
+                    span.Reverse();
+
+                    return buffer.AsMemory(0, 6);
+                }
+
+                try
+                {
+                    var buffer = ArrayPool<byte>.Shared.Rent(6);
+
+                    try
+                    {
+                        if (workSocket != null)
+                        {
+                            await workSocket.SendAsync(SetPayload(buffer, sequance), SocketFlags.None, cancellationToken);
+                        }
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(buffer);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // write clef error out when this happend???
+                    // error??
+                }
+            }
+
+            public async Task MessageRecieved(Message message, CancellationToken cancellationToken)
             {
                 if (this.MaxSequence < message.Sequence)
                 {
                     this.MaxSequence = message.Sequence;
                 }
+
                 this.batchSize--;
 
                 if (batchSize == 0)
@@ -84,18 +98,18 @@ namespace Seq.Input.Beats
                 }
 
                 // handle batch size of zero!!
-                ProcessMessage?.Invoke(this, message);
-            }
+                if (ProcessMessage != null)
+                {
+                    await ProcessMessage.Invoke(this, message);
+                }
 
-            private void ProcessChildMessage(ConnectionStateObject state, Message message)
-            {
-                this.MessageRecieved(message);
+                await AckMessage(message.Sequence, cancellationToken);
             }
 
             private States _state = States.READ_HEADER;
             private int _requiredBytes = 1;
-            private int _sequence = 0;
-            public int MaxSequence = 0;
+            private uint _sequence = 0;
+            public uint MaxSequence = 0;
 
             public States state
             {
@@ -147,13 +161,11 @@ namespace Seq.Input.Beats
                 return Encoding.UTF8.GetString(ReadBytes(length));
             }
 
-            public bool TryDecode()
+            public async Task<bool> TryDecode(CancellationToken cancellationToken)
             {
                 try
                 {
-                    while (TryDecodeInner())
-                    {
-                    }
+                    while (!cancellationToken.IsCancellationRequested && await TryDecodeInner(cancellationToken)) ;
                 }
                 catch (Exception ex)
                 {
@@ -184,7 +196,7 @@ namespace Seq.Input.Beats
                 return false;
             }
 
-            public bool TryDecodeInner()
+            public async Task<bool> TryDecodeInner(CancellationToken cancellationToken)
             {
                 int availibleBytes = writePosition - readPosition;
                 if (availibleBytes < _requiredBytes)
@@ -257,7 +269,7 @@ namespace Seq.Input.Beats
                             // Lumberjack version 1 protocol, which use the Key:Value format.
                             //logger.trace("Running: READ_DATA_FIELDS");
 
-                            var sequence = (int)ReadUInt();
+                            var sequence = ReadUInt();
                             //sequence = (int) in.readUnsignedInt();
                             int fieldsCount = (int)ReadUInt();
                             int count = 0;
@@ -282,15 +294,14 @@ namespace Seq.Input.Beats
                             }
 
                             this.state = States.READ_HEADER;
-                            this.MessageRecieved(message);
-                            batchSize--;
+                            await this.MessageRecieved(message, cancellationToken);
                             break;
                         }
                     case States.READ_JSON_HEADER:
                         {
                             // logger.trace("Running: READ_JSON_HEADER");
 
-                            _sequence = (int)ReadUInt();
+                            _sequence = ReadUInt();
                             var jsonPayloadSize = (int)ReadUInt();
 
                             if (jsonPayloadSize <= 0)
@@ -318,7 +329,10 @@ namespace Seq.Input.Beats
 
                             var state = new ConnectionStateObject()
                             {
-                                ProcessMessage = ProcessChildMessage
+                                ProcessMessage = async (s, m) =>
+                                {
+                                    await this.MessageRecieved(m, cancellationToken);
+                                }
                             };
 
                             while (true)
@@ -329,17 +343,17 @@ namespace Seq.Input.Beats
                                 {
                                     var read = stream.Read(state.buffer, state.writePosition, state.buffer.Length - state.writePosition);
                                     state.writePosition += read;
-                                    state.TryDecode();
+                                    await state.TryDecode(cancellationToken);
                                     if (read == 0)
                                     {
                                         break;
                                     }
                                 }
-                                catch(Exception ex)
+                                catch (Exception ex)
                                 {
                                     throw;
                                 }
-                                
+
                             }
                             this.state = States.READ_HEADER;
                             break;
@@ -351,7 +365,7 @@ namespace Seq.Input.Beats
                             var fields = JsonHelper.DeserializeAndFlatten(json);
 
                             var msg = new Message(_sequence, fields);
-                            MessageRecieved(msg);
+                            await MessageRecieved(msg, cancellationToken);
 
                             this.state = States.READ_HEADER;
                             break;
@@ -372,7 +386,7 @@ namespace Seq.Input.Beats
 
             internal void Expand()
             {
-                if (writePosition >= buffer.Length)
+                if (writePosition == buffer.Length)
                 {
                     // can trim off the start of the buffer first
                     var bufferlength = buffer.Length * 2;
