@@ -16,6 +16,8 @@ while (msg.length > 0) {
     {
         if (key == 'msg') {
             message.Message = value;
+        } else if(key == 'level') {
+            message.Level = value;
         } else if (key == 'date') {
             value = value.replace(",", ".")
             message.UtcTimestamp = value;
@@ -32,8 +34,12 @@ while (msg.length > 0) {
 
 // trim curlies
 properties = properties.substring(properties.indexOf('{') + 1, properties.lastIndexOf('}'))
+
+// cleanup broken parts
+properties = properties.replace(/RemoteIpAddress: IPAddress {.*?}, /gm, "");
+
 while (properties.length > 0) {
-    var match = properties.match(/ ?(.*?): (?:null|"(.*?)"),?/m)
+    var match = properties.match(/ ?(.*?): ({.*?}|\d+|null|".*?"),?/m)
     if (!match) {
         break;
     }
@@ -41,7 +47,12 @@ while (properties.length > 0) {
     properties = properties.replace(match[0], '')
     const key = match[1];
     const value = match[2];
-    message.Properties[key] = value;
+
+    try {
+        message.Properties[key] = JSON.parse(value);
+    } catch(ex) {
+        message.Properties[key] = value;
+    }
 }
 
 for (var k in propBag) {
