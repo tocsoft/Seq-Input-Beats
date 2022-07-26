@@ -2,6 +2,9 @@
 
 var properties = ""
 var propBag = {}
+
+propBag["@ingress.orginal"] = msg;
+
 while (msg.length > 0) {
     var match = msg.match(/\[ ([^ ]*) = ((?:.|\n)*?) \](?: |\n)?/m)
     if (!match) {
