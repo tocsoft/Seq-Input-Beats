@@ -15,12 +15,13 @@ namespace Seq.Input.Beats
         Description = "Endpoint excepting input in the format beats exposes")]
     public partial class BeatsInput : SeqApp, IPublishJson, IDisposable
     {
-        private TextWriter textWriter;
+        private TextWriter? textWriter;
         private CancellationTokenSource? tokenSource;
         private Task? task;
 
         [SeqAppSetting(
             DisplayName = "Listening Port",
+            HelpText = "Default port 5044",
             InputType = SettingInputType.Integer,
             IsOptional = true)]
         public int Port { get; set; } = 5044;
@@ -29,15 +30,16 @@ namespace Seq.Input.Beats
             DisplayName = "Transform Script",
             InputType = SettingInputType.LongText,
             IsOptional = true)]
-        public string TransformScript { get; set; }
+        public string TransformScript { get; set; } = string.Empty;
 
-        public string TransformScriptPath { get; set; }
+        public string TransformScriptPath { get; set; } = string.Empty;
 
         private bool RunTransform => !string.IsNullOrWhiteSpace(TransformScript) || RunTransformDebugMode;
 
         private bool RunTransformDebugMode => !string.IsNullOrWhiteSpace(TransformScriptPath) && File.Exists(TransformScriptPath);
 
-        private Jint.Parser.Ast.Program parseTransform;
+        private Jint.Parser.Ast.Program? parseTransform = null;
+
         public void Start(TextWriter inputWriter)
         {
             if (RunTransformDebugMode)
@@ -110,7 +112,7 @@ namespace Seq.Input.Beats
                         await state.TryDecode(cancellationToken);
 
                     }
-                    catch (Exception ex)
+                    catch
                     {
                         break;
                     }
@@ -126,24 +128,36 @@ namespace Seq.Input.Beats
 
         public Task HandleMessages(ConnectionStateObject state, Message message)
         {
+            if (textWriter == null)
+            {
+                return Task.CompletedTask;
+            }
+
             var result = message.AsResult();
             // add transforms handling here
 
             if (RunTransform)
             {
-                var jsEngine = new Engine(options =>
+                try
                 {
+                    var jsEngine = new Engine(options =>
+                    {
                     // Set a timeout to 4 seconds.
-                    options.TimeoutInterval(TimeSpan.FromSeconds(1));
+                        options.TimeoutInterval(TimeSpan.FromSeconds(1));
 
-                    options.LimitRecursion(100);
+                        options.LimitRecursion(100);
 
-                    options.DebugMode(RunTransformDebugMode);
-                });
+                        options.DebugMode(RunTransformDebugMode);
+                    });
 
-                jsEngine.SetValue("message", result);
+                    jsEngine.SetValue("message", result);
 
-                jsEngine.Execute(parseTransform);
+                    jsEngine.Execute(parseTransform);
+                }
+                catch(Exception ex)
+                {
+                    result.Properties["Seq.App.Beats.JintError"] = ex.ToString();
+                }
             }
 
             lock (textWriter)

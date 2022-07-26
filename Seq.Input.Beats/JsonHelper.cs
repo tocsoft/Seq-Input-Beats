@@ -44,7 +44,7 @@ namespace Seq.Input.Beats
                         }
                         else
                         {
-                            dict.Add(prefix, val.ToString());
+                            dict.Add(prefix, val.ToString()!);
                         }
                     }
 

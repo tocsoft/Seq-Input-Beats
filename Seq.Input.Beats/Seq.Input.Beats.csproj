@@ -1,15 +1,34 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
-    <Nullable>enable</Nullable>
-    <OutputType>Library</OutputType>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>netstandard2.1</TargetFramework>
+		<Description>
+			Recieve logs from filebeats
+		</Description>
+		<Authors>Tocsoft</Authors>
+		<PackageTags>seq-app</PackageTags>
+		<PackageIcon>icon.png</PackageIcon>
+		<PackageProjectUrl>https://github.com/tocsoft/Seq-Input-Beats</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/tocsoft/Seq-Input-Beats</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<TreatWarningsAsErrors>False</TreatWarningsAsErrors>
+		<TreatSpecificWarningsAsErrors />
+		<LangVersion>latest</LangVersion>
+		<Nullable>enable</Nullable>
+		<PackDependsOn>Publish;$(PackDependsOn)</PackDependsOn>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Jint" Version="2.11.58" />
-    <PackageReference Include="Seq.Apps" Version="2021.4.0" />
-	  <PackageReference Include="newtonsoft.json" Version="13.0.1" />
-  </ItemGroup>
-
+	<ItemGroup>
+		<PackageReference Include="Jint" Version="2.11.58"  />
+		<PackageReference Include="MinVer" Version="4.1.0">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Seq.Apps" Version="2021.4.0" />
+		<PackageReference Include="newtonsoft.json" Version="13.0.1" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="./icon.png" Pack="true" Visible="false" PackagePath="" />
+		<None Include="$(PublishDir)/**/*" Exclude="$(PublishDir)/Seq.Input.Beats.dll;$(PublishDir)/Seq.Apps.dll;$(PublishDir)/Serilog.dll" Pack="true" PackagePath="lib/$(TargetFramework)" />
+	</ItemGroup>
 </Project>

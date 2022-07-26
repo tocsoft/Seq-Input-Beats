@@ -9,6 +9,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="3.1.27" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="6.0.0" />
+	  <PackageReference Include="MinVer" Version="4.1.0">
+		  <PrivateAssets>all</PrivateAssets>
+		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+	  </PackageReference>
     <ProjectReference Include="..\Seq.Input.Beats\Seq.Input.Beats.csproj" />
   </ItemGroup>
 

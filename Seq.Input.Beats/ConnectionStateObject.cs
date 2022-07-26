@@ -37,7 +37,7 @@ namespace Seq.Input.Beats
                         MaxSequence = 0;
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
                     // write clef error out when this happend???
                     // error??
@@ -76,7 +76,7 @@ namespace Seq.Input.Beats
                         ArrayPool<byte>.Shared.Return(buffer);
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
                     // write clef error out when this happend???
                     // error??
@@ -128,6 +128,7 @@ namespace Seq.Input.Beats
                         States.READ_COMPRESSED_FRAME => -1,
                         States.READ_JSON => -1,
                         States.READ_DATA_FIELDS => -1,
+                        _ => -1,
                     };
                 }
             }
@@ -167,7 +168,7 @@ namespace Seq.Input.Beats
                 {
                     while (!cancellationToken.IsCancellationRequested && await TryDecodeInner(cancellationToken)) ;
                 }
-                catch (Exception ex)
+                catch
                 {
                     throw;
                 }
@@ -349,7 +350,7 @@ namespace Seq.Input.Beats
                                         break;
                                     }
                                 }
-                                catch (Exception ex)
+                                catch
                                 {
                                     throw;
                                 }

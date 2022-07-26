@@ -12,13 +12,13 @@ namespace Seq.Input.Beats
 
         public string? Exception { get; set; }
 
-        public string MessageTemplate { get; set; }
+        public string? MessageTemplate { get; set; } 
 
-        public string Message { get; set; }
+        public string? Message { get; set; }
 
         public string? Level { get; set; }
 
-        Dictionary<string, object> _feilds;
+        Dictionary<string, object>? _feilds = null;
         public IDictionary<string, object> Properties => _feilds ?? (_feilds = new Dictionary<string, object>());
 
         public void Write(TextWriter writer)
